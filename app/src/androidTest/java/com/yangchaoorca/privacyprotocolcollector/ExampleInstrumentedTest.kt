@@ -44,20 +44,20 @@ class ExampleInstrumentedTest {
                 var isOpen = true
                 try {
                     device.findObject(UiSelector().text(appName)).click()
+
+                    // TODO: 获取隐私协议，包括进应用弹和进应用不弹，以及部分需要点击隐私协议里的文本进行二次跳转
+                    // 首次进入应用就弹隐私协议的情况
+                    val textView = device.findObject(
+                        UiSelector().textContains("协议").className("android.widget.TextView")
+                    )
+                    try {
+                        println(textView.text)
+                    } catch (e: Exception) {
+                        println("进入应用不弹隐私协议，需要手动获取弹出，${e.message}")
+                    }
                 } catch (e: Exception) {
                     println("找不到应用，${e.message}")
                     isOpen = false
-                }
-
-                // TODO: 获取隐私协议，包括进应用弹和进应用不弹，以及部分需要点击隐私协议里的文本进行二次跳转
-                // 首次进入应用就弹隐私协议的情况
-                val textView = device.findObject(
-                    UiSelector().textContains("协议").className("android.widget.TextView")
-                )
-                try {
-                    println(textView.text)
-                } catch (e: Exception) {
-                    println("进入应用不弹隐私协议，需要手动获取弹出，${e.message}")
                 }
 
                 // 找到并打开应用后点击 home 键回到首页
