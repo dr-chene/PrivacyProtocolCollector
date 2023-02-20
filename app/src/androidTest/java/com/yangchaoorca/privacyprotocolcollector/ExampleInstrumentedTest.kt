@@ -6,12 +6,18 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.text.TextUtils
+import android.util.Log
+import android.widget.TextView
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiSelector
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
+import java.io.FileWriter
+import java.time.LocalDateTime
 
 /**
  * Instrumented test, which will execute on an Android device.
@@ -38,26 +44,36 @@ class ExampleInstrumentedTest {
             swipeToLeft()
         }
 
+        val storeBaseLocation = ApplicationProvider.getApplicationContext<Context>()
+            .getExternalFilesDir(null)?.absolutePath + "/"
+        val time = LocalDateTime.now().toString()
+
+        val screenshotPath = storeBaseLocation + "screenshot" + File.separator
+        Log.d(TAG, "运行输出基本存储路径 $storeBaseLocation")
+        val cantEnter = FileWriter(File(storeBaseLocation + "cant_enter_app.txt").apply {
+            if (!exists()) {
+                createNewFile()
+            }
+        })
         // 读取 app 名字文件，打开应用
         APP_NAME.splitToSequence("、").map { it.trim() }.forEachIndexed { index, appName ->
             if (!TextUtils.isEmpty(appName)) {
                 var isOpen = true
                 try {
-                    device.findObject(UiSelector().text(appName)).click()
-
-                    // TODO: 获取隐私协议，包括进应用弹和进应用不弹，以及部分需要点击隐私协议里的文本进行二次跳转
-                    // 首次进入应用就弹隐私协议的情况
-                    val textView = device.findObject(
-                        UiSelector().textContains("协议").className("android.widget.TextView")
-                    )
-                    try {
-                        println(textView.text)
-                    } catch (e: Exception) {
-                        println("进入应用不弹隐私协议，需要手动获取弹出，${e.message}")
+                    val icon = device.findObject(UiSelector().text(appName))
+                    if (icon.exists() && icon.isClickable) {
+                        icon.clickAndWaitForNewWindow()
+                        // 所有APP在首次打开时，都必须通过弹窗等显著方式向用户展示隐私协议内容
+                        // 因此启动应用后直接读取即可
+                        readText(device, appName, "$screenshotPath${appName}_$time.jpg")
+                    } else {
+                        isOpen = false
+                        // 收集进入失败的应用名，后续进行手动分析
+                        Log.d(TAG, "未找到应用图标，appName = $appName, index = $index")
+                        cantEnter.appendLine("appName = $appName, index = $index")
                     }
                 } catch (e: Exception) {
-                    println("找不到应用，${e.message}")
-                    isOpen = false
+                    Log.d("runtime_error", e.message ?: "")
                 }
 
                 // 找到并打开应用后点击 home 键回到首页
@@ -65,19 +81,58 @@ class ExampleInstrumentedTest {
                     device.pressHome()
                 }
                 // 收集完当前页面应用的隐私协议，滑到下一个页面
-                if (index != 0 && index % (APP_PAGE_COUNT - 1) == 0) {
+                if ((index + 1) % APP_PAGE_COUNT == 0) {
                     swipeToLeft()
                 }
             }
+        }
+        // 关闭文件流
+        cantEnter.flush()
+        cantEnter.close()
+    }
+
+    private fun readText(device: UiDevice, appName: String, filePath: String): Boolean {
+        // 某些应用首次进入会申请权限，直接拒绝
+        val rejectButton = device.findObject(UiSelector().text("拒接"))
+        if (rejectButton.exists() && rejectButton.isClickable) {
+            rejectButton.click()
+        }
+        // 用户协议、隐私政策、青少年xxx
+        val textView =
+            device.findObject(UiSelector().textContains("协议").className(TextView::class.java))
+        if (textView.exists()) {
+            val privacyInfo = PrivacyInfo(appName, textView.text)
+            // TODO: 收集额外的协议信息，例如协议文本中可点击的文本信息
+            // 多数协议都是以可点击的SpannableString的形式展示在弹窗中的，需要点击进入WebView才能获取到完整的协议
+
+            // TODO: 保存协议文本信息
+            return true
+        } else {
+            Log.d(TAG, "$appName 获取隐私协议失败，详情见截图，$filePath")
+            // TODO: 某些应用（抖音）进入应用后弹出隐私协议较慢，需要处理
+            // 保存截图，用于后续分析
+            device.takeScreenshot(File(filePath))
+            return false
         }
     }
 
     companion object {
 
+        private const val TAG = "runtime_log"
+
         // 按home键回到首页，滑动到存放测试app页所需的次数
-        private const val APP_SWIPE = 1
+        private const val APP_SWIPE = 3
+
         // 每页存放的测试 app 总数，依靠该数量换页。相应的，app 名字也需要以该数字为界
-        private const val APP_PAGE_COUNT = 2
+        private const val APP_PAGE_COUNT = 3
+    }
+
+    private data class PrivacyInfo(val name: String, val text: String) {
+        val extraDataMap = mutableMapOf<String, String>()
+
+        fun put(key: String, value: String) {
+            extraDataMap[key] = value
+        }
     }
 
 //        val context = ApplicationProvider.getApplicationContext<Context>()
