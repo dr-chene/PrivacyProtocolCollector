@@ -4,18 +4,20 @@ import android.content.Context
 import android.text.TextUtils
 import android.util.Log
 import android.webkit.WebView
-import android.widget.Button
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.*
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject2
+import androidx.test.uiautomator.Until
 import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.io.FileWriter
-import java.time.LocalDateTime
 
 /**
  * Instrumented test, which will execute on an Android device.
@@ -24,6 +26,20 @@ import java.time.LocalDateTime
  */
 @RunWith(AndroidJUnit4::class)
 class ExampleInstrumentedTest {
+
+    private lateinit var device: UiDevice
+
+    /**
+     * 测试真机是否卡顿
+     */
+    @Test
+    fun demo() {
+        device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        for (i in 0..1000) {
+            device.click(device.displayWidth / 2, device.displayHeight / 2)
+            Log.d(TAG, "demo: $i")
+        }
+    }
 
     /**
      * 进入隐私协议 web 页面是通过 pressDPadDown + pressEnter 的方法实现的
@@ -35,124 +51,191 @@ class ExampleInstrumentedTest {
      */
     @Test
     fun collectPrivacyProtocolText() {
-        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
-        // 回到桌面，滑动到我们预先放置测试 app 的页面
-        device.pressHome()
-        device.pressHome() // 防止不在桌面的情况
-        val width = device.displayWidth
-        val height = device.displayHeight
-        // 局部函数，向右滑
-        val swipeToLeft = {
-            device.swipe(width / 4 * 3, height / 2, width / 4, height / 2, 5)
-        }
-        for (i in 0 until APP_SWIPE) {
-            swipeToLeft()
-        }
+        jumpToStartPage()
 
         val storeBaseLocation = ApplicationProvider.getApplicationContext<Context>()
             .getExternalFilesDir(null)?.absolutePath + "/"
-        val time = LocalDateTime.now().toString()
 
-        val screenshotPath = storeBaseLocation + "screenshot" + File.separator
         Log.d(TAG, "运行输出基本存储路径 $storeBaseLocation")
-        val collectFailed = FileWriter(File(storeBaseLocation + "CollectFailed.txt").apply {
-            if (!exists()) {
-                createNewFile()
-            }
-        })
-        val collectSuccess = FileWriter(File(storeBaseLocation + "CollectSuccess.txt").apply {
-            if (!exists()) {
-                createNewFile()
-            }
-        })
+        val fileInit: (String) -> FileWriter = {
+            FileWriter(File(storeBaseLocation + it).apply {
+                if (!exists()) {
+                    createNewFile()
+                }
+            })
+        }
+        val collectFailed = fileInit("CollectFailed.txt")
+        val collectSuccess = fileInit("CollectSuccess.txt")
+        val halfCollect = fileInit("HalfCollect.txt")
+
+        val halfAutoCollectList = mutableListOf<Pair<Int, String>>()
         try {
             // 读取 app 名字文件，打开应用
             APP_NAME_TEST.splitToSequence("、").map { it.trim() }.forEachIndexed { index, appName ->
-                if (!TextUtils.isEmpty(appName)) {
-                    Log.d(TAG, "开始收集：appName = $appName")
-                    var isOpen = true
-                    val icon = device.findObject(UiSelector().text(appName))
-                    if (icon.exists() && icon.isClickable) {
-                        icon.clickAndWaitForNewWindow()
-                        // 所有APP在首次打开时，都必须通过弹窗等显著方式向用户展示隐私协议内容
-                        // 因此启动应用后直接读取即可
-                        if (!readText(
-                                device,
-                                appName,
-                                "$screenshotPath${appName}_$time.jpg",
-                                collectSuccess
-                            )) {
-                            Log.d(TAG, "协议文本收集失败，appName = $appName, index = $index")
-                            collectFailed.appendLine("协议文本收集失败，appName = $appName, index = $index")
-                        }
-                    } else {
-                        isOpen = false
-                        // 收集进入失败的应用名，后续进行手动分析
-                        Log.d(TAG, "未找到应用图标，appName = $appName, index = $index")
-                        collectFailed.appendLine("未找到应用图标，appName = $appName, index = $index")
-                    }
+                collectText(
+                    index,
+                    appName,
+                    false,
+                    halfAutoCollectList,
+                    collectFailed,
+                    collectSuccess
+                )
+            }
+            Log.e(TAG, "全自动收集完成，接下来开始半自动化收集")
 
-                    Log.d(TAG, "收集结束，回到桌面")
-                    // 找到并打开应用后点击 home 键回到首页
-                    if (isOpen) {
-                        device.pressHome()
-                    }
-                    // 收集完当前页面应用的隐私协议，滑到下一个页面
-                    if ((index + 1) % APP_PAGE_COUNT == 0) {
-                        swipeToLeft()
-                    }
-                }
+            // 开始收集需要半自动化收集的应用
+            jumpToStartPage()
+            halfAutoCollectList.forEach { (index, appName) ->
+                halfCollect.appendLine(JSONObject().apply {
+                    put("index", index)
+                    put("appName", appName)
+                }.toString())
+                collectText(index, appName, true, null, collectFailed, collectSuccess)
             }
         } catch (e: Exception) {
-            Log.d("runtime_error", e.message ?: "")
+//            Log.e("runtime_error", e.toString())
+            e.printStackTrace()
         } finally {
             // 关闭文件流
             collectFailed.flush()
             collectFailed.close()
             collectSuccess.flush()
             collectSuccess.close()
+            halfCollect.flush()
+            halfCollect.close()
+        }
+
+        Log.d(TAG, "程序运行结束")
+    }
+
+    private fun jumpToStartPage() {
+        // 回到桌面，滑动到我们预先放置测试 app 的页面
+        device.pressHome()
+        device.pressHome() // 防止不在桌面的情况
+
+        for (i in 0 until APP_SWIPE) {
+            swipeToLeft()
         }
     }
 
-    private fun getPressDownTimes(device: UiDevice): Int {
-        val textViews = device.findObjects(By.clazz(TextView::class.java))
-        val buttons = device.findObjects(By.clazz(Button::class.java))
-
-        return textViews.size - 2 - if (buttons.size >= 2) 0 else 2
+    private fun swipeToLeft() {
+        val width = device.displayWidth
+        val height = device.displayHeight
+        device.swipe(width / 4 * 3, height / 2, width / 4, height / 2, 5)
     }
 
-    private fun clickTextLink(device: UiDevice, privacyInfo: PrivacyInfo) {
-        device.findObjects(By.textStartsWith("《").clazz(TextView::class.java)).forEachIndexed { index, uiObject2 ->
-            if (uiObject2.isClickable) {
-                uiObject2.clickAndWait(Until.newWindow(), WAIT_FOR_WINDOW_TIMEOUT)
-                enterWebWindow(device, privacyInfo, index)
+    private fun collectText(
+        index: Int,
+        appName: String,
+        isHalfAuto: Boolean,
+        halfList: MutableList<Pair<Int, String>>?,
+        failed: FileWriter,
+        success: FileWriter
+    ) {
+        if (!TextUtils.isEmpty(appName)) {
+            Log.d(TAG, "开始收集：appName = $appName")
+            var isOpen = true
+            val icon = device.findObject(By.text(appName))
+            if (icon != null) {
+                // 可能存在桌面图标点击不了的情况
+                device.performActionAndWait({
+                    device.click(icon.visibleBounds.centerX(), icon.visibleBounds.centerY())
+                }, Until.newWindow(), WAIT_FOR_WINDOW_TIMEOUT)
+
+                Thread.sleep(WAIT_FOR_WINDOW_TIMEOUT)
+                // 所有APP在首次打开时，都必须通过弹窗等显著方式向用户展示隐私协议内容
+                // 因此启动应用后直接读取即可
+                if (!readText(appName, success, isHalfAuto)) {
+                    Log.e(TAG, "协议文本收集失败，appName = $appName, index = $index")
+                    failed.appendLine("协议文本收集失败，appName = $appName, index = $index")
+                    // 失败的原因多数是因为代码无法普遍适配开发者非常规的实现，将这些 app 收集用于后续半自动化收集
+                    halfList?.add(index to appName)
+                }
+
+                Log.d(TAG, "收集结束，回到桌面")
+            } else {
+                isOpen = false
+                // 收集进入失败的应用名，后续进行手动分析
+                Log.e(TAG, "未找到应用图标，appName = $appName, index = $index")
+                failed.appendLine("未找到应用图标，appName = $appName, index = $index")
+            }
+
+            // 找到并打开应用后点击 home 键回到首页
+            if (isOpen) {
+                device.pressHome()
+            }
+            // 收集完当前页面应用的隐私协议，滑到下一个页面
+            if ((index + 1) % APP_PAGE_COUNT == 0) {
+                swipeToLeft()
             }
         }
     }
 
-    private fun readText(
-        device: UiDevice,
-        appName: String,
-        filePath: String,
-        out: FileWriter
-    ): Boolean {
-        // 某些应用首次进入会申请权限，直接拒绝
-        val rejectButton = device.findObject(UiSelector().text("拒接"))
-        if (rejectButton.exists() && rejectButton.isClickable) {
-            rejectButton.click()
+    private fun clickTextLink(privacyInfo: PrivacyInfo): Boolean {
+        var clicked = 0
+        // 假设单独存放的文本链接是以书名号包围的，否则归为非常规实现
+
+        // text 实现
+        device.findObjects(By.textStartsWith("《")).forEachIndexed { index, uiObject2 ->
+            if (uiObject2 != null && uiObject2.isClickable) {
+                clicked++
+                uiObject2.click()
+                enterDetailWindow(privacyInfo, index)
+            }
         }
+        if (clicked <= 0) {
+            // desc 实现
+            device.findObjects(By.descStartsWith("《")).forEachIndexed { index, uiObject2 ->
+                if (uiObject2 != null && uiObject2.isClickable) {
+                    clicked++
+                    uiObject2.click()
+                    enterDetailWindow(privacyInfo, index)
+                }
+            }
+        }
+        return clicked > 0
+    }
+
+    private fun readText(
+        appName: String,
+        out: FileWriter,
+        isHalfAuto: Boolean
+    ): Boolean {
+//        // 某些应用首次进入会申请权限，直接拒绝
+//        val rejectButton = device.findObject(UiSelector().text("拒接"))
+//        if (rejectButton.exists() && rejectButton.isClickable) {
+//            rejectButton.click()
+//        }
         // 用户协议、隐私政策、青少年xxx
-        val textView =
-            device.findObject(UiSelector().textContains("《").className(TextView::class.java))
-        if (textView.exists()) {
-            val privacyInfo = PrivacyInfo(appName, textView.text)
+        var textView = device.findObject(By.clazz(ScrollView::class.java))
+        if (textView == null) {
+            textView =
+                device.findObject(By.textContains("《").clazz(TextView::class.java))
+        }
+        if (textView == null) {
+            return false
+        }
+        val simpleInfo = StringBuilder()
+        readTextDeeply(textView, simpleInfo)
+
+        val privacyInfo = PrivacyInfo(appName, simpleInfo.toString())
+        if (isHalfAuto) {
+            Log.d(TAG, "半自动化收集开始，appName = $appName")
+            for (i in 0..1) {
+                // 操作者手动点击文本链接转到 web 页面
+                device.waitForWindowUpdate(
+                    device.currentPackageName,
+                    2 * WAIT_FOR_WINDOW_TIMEOUT
+                )
+                enterDetailWindow(privacyInfo, i)
+            }
+        } else {
             // 多数协议都是以可点击的SpannableString的形式展示在弹窗中的，需要点击进入WebView才能获取到完整的协议
-            if (getPressDownTimes(device) > 2) {
-                // 单独放置的文本链接场景
-                clickTextLink(device, privacyInfo)
-            } else {
-                // 标准的文本内嵌 web 链接场景
+            // 单独放置的文本链接场景
+            if (!clickTextLink(privacyInfo)) {
+                // 标准的 ScrollView + 单 Textview + 内嵌 web 链接场景
                 device.pressDPadDown() // 获取文本焦点
                 // 市面上 app 以书名号 + 用户协议、隐私政策为主流
                 for (i in 0..1) {
@@ -160,41 +243,42 @@ class ExampleInstrumentedTest {
                             device.pressDPadDown()
                             device.pressEnter()
                         }, Until.newWindow(), WAIT_FOR_WINDOW_TIMEOUT)) {
-                        enterWebWindow(device, privacyInfo, i)
+                        enterDetailWindow(privacyInfo, i)
                     } else {
                         break
                     }
                 }
             }
-            return if (privacyInfo.isLegal()) {
-                privacyInfo.toJson().let {
-                    // 保存协议文本信息
-                    out.appendLine(it)
+        }
+
+        return if (privacyInfo.isLegal()) {
+            privacyInfo.toJson().let {
+                // 保存协议文本信息
+                out.appendLine(it)
 //                    Log.d(TAG, "收集的协议信息：$it")
-                }
-                true
-            } else {
-                false
             }
+            true
         } else {
-            Log.d(TAG, "$appName 获取隐私协议失败，详情见截图，$filePath")
-            // TODO: 某些应用（抖音）进入应用后弹出隐私协议较慢，需要处理。目前未处理，不收集大厂 app
-            // 保存截图，用于后续分析
-            device.takeScreenshot(File(filePath))
-            return false
+            false
         }
     }
 
-    private fun enterWebWindow(device: UiDevice, privacyInfo: PrivacyInfo, index: Int) {
-        val webView =
-            device.findObject(UiSelector().className(WebView::class.java).instance(1))
-        if (webView.exists()) {
+    private fun enterDetailWindow(privacyInfo: PrivacyInfo, index: Int) {
+        Thread.sleep(3000)
+        val webViews = device.findObjects(By.clazz(WebView::class.java))
+        val detailView = if (webViews.size > 1) {
+            webViews[1]
+        } else {
+            device.findObject(By.clazz(ScrollView::class.java))
+        }
+
+        if (detailView != null) {
             val sb = StringBuilder()
-            readTextDeeply(webView, sb)
+            readTextDeeply(detailView, sb)
 
             privacyInfo.put(index, sb.toString())
         } else {
-            Log.d("runtime_error", "进入详情页后没有找到web")
+            Log.e("runtime_error", "进入详情页后没有找到详情 view")
         }
         device.pressBack()
     }
@@ -202,16 +286,15 @@ class ExampleInstrumentedTest {
     /**
      * 递归读取 WebView 协议文本
      */
-    private fun readTextDeeply(view: UiObject, sb: StringBuilder) {
+    private fun readTextDeeply(view: UiObject2, sb: StringBuilder) {
 //        Log.d(TAG, "当前 UiObject childCount = ${view.childCount}")
-        for (i in 0 until view.childCount) {
-            val subView = view.getChild(UiSelector().index(i))
-            if (subView.exists()) {
-                if (subView.text.isNotEmpty()) {
-                    sb.append(subView.text).append('\n')
-                }
-                readTextDeeply(subView, sb)
+        view.children.forEach {
+            if (!it.text.isNullOrEmpty()) {
+                sb.append(it.text).append('\n')
+            } else if (!it.contentDescription.isNullOrEmpty()) {
+                sb.append(it.contentDescription).append('\n')
             }
+            readTextDeeply(it, sb)
         }
     }
 
