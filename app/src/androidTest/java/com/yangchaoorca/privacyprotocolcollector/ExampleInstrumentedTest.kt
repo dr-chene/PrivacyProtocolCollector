@@ -4,14 +4,12 @@ import android.content.Context
 import android.text.TextUtils
 import android.util.Log
 import android.webkit.WebView
+import android.widget.Button
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.UiObject
-import androidx.test.uiautomator.UiSelector
-import androidx.test.uiautomator.Until
+import androidx.test.uiautomator.*
 import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -58,19 +56,19 @@ class ExampleInstrumentedTest {
 
         val screenshotPath = storeBaseLocation + "screenshot" + File.separator
         Log.d(TAG, "运行输出基本存储路径 $storeBaseLocation")
-        val cantEnter = FileWriter(File(storeBaseLocation + "CantEnter.txt").apply {
+        val collectFailed = FileWriter(File(storeBaseLocation + "CollectFailed.txt").apply {
             if (!exists()) {
                 createNewFile()
             }
         })
-        val collectResult = FileWriter(File(storeBaseLocation + "CollectResult.txt").apply {
+        val collectSuccess = FileWriter(File(storeBaseLocation + "CollectSuccess.txt").apply {
             if (!exists()) {
                 createNewFile()
             }
         })
         try {
             // 读取 app 名字文件，打开应用
-            APP_NAME.splitToSequence("、").map { it.trim() }.forEachIndexed { index, appName ->
+            APP_NAME_TEST.splitToSequence("、").map { it.trim() }.forEachIndexed { index, appName ->
                 if (!TextUtils.isEmpty(appName)) {
                     Log.d(TAG, "开始收集：appName = $appName")
                     var isOpen = true
@@ -79,17 +77,20 @@ class ExampleInstrumentedTest {
                         icon.clickAndWaitForNewWindow()
                         // 所有APP在首次打开时，都必须通过弹窗等显著方式向用户展示隐私协议内容
                         // 因此启动应用后直接读取即可
-                        readText(
-                            device,
-                            appName,
-                            "$screenshotPath${appName}_$time.jpg",
-                            collectResult
-                        )
+                        if (!readText(
+                                device,
+                                appName,
+                                "$screenshotPath${appName}_$time.jpg",
+                                collectSuccess
+                            )) {
+                            Log.d(TAG, "协议文本收集失败，appName = $appName, index = $index")
+                            collectFailed.appendLine("协议文本收集失败，appName = $appName, index = $index")
+                        }
                     } else {
                         isOpen = false
                         // 收集进入失败的应用名，后续进行手动分析
                         Log.d(TAG, "未找到应用图标，appName = $appName, index = $index")
-                        cantEnter.appendLine("appName = $appName, index = $index")
+                        collectFailed.appendLine("未找到应用图标，appName = $appName, index = $index")
                     }
 
                     Log.d(TAG, "收集结束，回到桌面")
@@ -107,10 +108,26 @@ class ExampleInstrumentedTest {
             Log.d("runtime_error", e.message ?: "")
         } finally {
             // 关闭文件流
-            cantEnter.flush()
-            cantEnter.close()
-            collectResult.flush()
-            collectResult.close()
+            collectFailed.flush()
+            collectFailed.close()
+            collectSuccess.flush()
+            collectSuccess.close()
+        }
+    }
+
+    private fun getPressDownTimes(device: UiDevice): Int {
+        val textViews = device.findObjects(By.clazz(TextView::class.java))
+        val buttons = device.findObjects(By.clazz(Button::class.java))
+
+        return textViews.size - 2 - if (buttons.size >= 2) 0 else 2
+    }
+
+    private fun clickTextLink(device: UiDevice, privacyInfo: PrivacyInfo) {
+        device.findObjects(By.textStartsWith("《").clazz(TextView::class.java)).forEachIndexed { index, uiObject2 ->
+            if (uiObject2.isClickable) {
+                uiObject2.clickAndWait(Until.newWindow(), WAIT_FOR_WINDOW_TIMEOUT)
+                enterWebWindow(device, privacyInfo, index)
+            }
         }
     }
 
@@ -131,35 +148,34 @@ class ExampleInstrumentedTest {
         if (textView.exists()) {
             val privacyInfo = PrivacyInfo(appName, textView.text)
             // 多数协议都是以可点击的SpannableString的形式展示在弹窗中的，需要点击进入WebView才能获取到完整的协议
-            device.pressDPadCenter() // 获取文本焦点
-            // 市面上 app 以书名号 + 用户协议、隐私政策为主流
-            // 为了简便，本程序也主要处理这种情况
-            for (i in 0..1) {
-                if (device.performActionAndWait({
-                        device.pressDPadDown()
-                        device.pressEnter()
-                    }, Until.newWindow(), WAIT_FOR_WINDOW_TIMEOUT)) {
-                    val webView =
-                        device.findObject(UiSelector().className(WebView::class.java).instance(1))
-                    if (webView.exists()) {
-                        val sb = StringBuilder()
-                        readTextDeeply(webView, sb)
-
-                        privacyInfo.put(i, sb.toString())
+            if (getPressDownTimes(device) > 2) {
+                // 单独放置的文本链接场景
+                clickTextLink(device, privacyInfo)
+            } else {
+                // 标准的文本内嵌 web 链接场景
+                device.pressDPadDown() // 获取文本焦点
+                // 市面上 app 以书名号 + 用户协议、隐私政策为主流
+                for (i in 0..1) {
+                    if (device.performActionAndWait({
+                            device.pressDPadDown()
+                            device.pressEnter()
+                        }, Until.newWindow(), WAIT_FOR_WINDOW_TIMEOUT)) {
+                        enterWebWindow(device, privacyInfo, i)
                     } else {
-                        Log.d("runtime_error", "进入详情页后没有找到web")
+                        break
                     }
-                    device.pressBack()
-                } else {
-                    break
                 }
             }
-            privacyInfo.toJson().let {
-                // 保存协议文本信息
-                out.appendLine(it)
-//                Log.d(TAG, "收集的协议信息：$it")
+            return if (privacyInfo.isLegal()) {
+                privacyInfo.toJson().let {
+                    // 保存协议文本信息
+                    out.appendLine(it)
+//                    Log.d(TAG, "收集的协议信息：$it")
+                }
+                true
+            } else {
+                false
             }
-            return true
         } else {
             Log.d(TAG, "$appName 获取隐私协议失败，详情见截图，$filePath")
             // TODO: 某些应用（抖音）进入应用后弹出隐私协议较慢，需要处理。目前未处理，不收集大厂 app
@@ -167,6 +183,20 @@ class ExampleInstrumentedTest {
             device.takeScreenshot(File(filePath))
             return false
         }
+    }
+
+    private fun enterWebWindow(device: UiDevice, privacyInfo: PrivacyInfo, index: Int) {
+        val webView =
+            device.findObject(UiSelector().className(WebView::class.java).instance(1))
+        if (webView.exists()) {
+            val sb = StringBuilder()
+            readTextDeeply(webView, sb)
+
+            privacyInfo.put(index, sb.toString())
+        } else {
+            Log.d("runtime_error", "进入详情页后没有找到web")
+        }
+        device.pressBack()
     }
 
     /**
@@ -199,8 +229,8 @@ class ExampleInstrumentedTest {
     }
 
     private class PrivacyInfo(val name: String, val text: String) {
-        private lateinit var userAgreement: String
-        private lateinit var privacyPolicy: String
+        private var userAgreement: String = ""
+        private var privacyPolicy: String = ""
 
         fun put(index: Int, value: String) {
             when (index) {
@@ -216,6 +246,10 @@ class ExampleInstrumentedTest {
                 put("userAgreement", userAgreement)
                 put("privacyPolicy", privacyPolicy)
             }.toString()
+        }
+
+        fun isLegal(): Boolean {
+            return userAgreement.isNotEmpty() && privacyPolicy.isNotEmpty()
         }
     }
 }
