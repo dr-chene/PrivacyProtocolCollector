@@ -413,7 +413,7 @@ class ExampleInstrumentedTest {
         }
 
         fun isLegal(): Boolean {
-            return userAgreement.isNotEmpty() && privacyPolicy.isNotEmpty()
+            return userAgreement.isNotEmpty() && privacyPolicy.isNotEmpty() && !TextUtils.equals(userAgreement, privacyPolicy)
         }
     }
 }
