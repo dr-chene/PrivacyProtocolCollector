@@ -55,17 +55,6 @@ class ExampleInstrumentedTest {
 
         jumpToStartPage()
 
-        val storeBaseLocation = ApplicationProvider.getApplicationContext<Context>()
-            .getExternalFilesDir(null)?.absolutePath + "/"
-
-        Log.d(TAG, "运行输出基本存储路径 $storeBaseLocation")
-        val fileInit: (String) -> FileWriter = {
-            FileWriter(File(storeBaseLocation + it).apply {
-                if (!exists()) {
-                    createNewFile()
-                }
-            })
-        }
         val collectFailed = fileInit("CollectFailed.txt")
         val collectSuccess = fileInit("CollectSuccess.txt")
         val halfCollect = fileInit("HalfCollect.txt")
@@ -108,6 +97,31 @@ class ExampleInstrumentedTest {
         }
 
         Log.d(TAG, "程序运行结束")
+    }
+
+    /**
+     * 收集单独的 app 文件
+     * 进入 app，手动点击弹出协议简介后点击运行
+     * 以 append 的方式存放于另以文件
+     */
+    @Test
+    fun collectOneApp() {
+        val appName = ""
+
+        val out = fileInit("SingleCollect.txt", true)
+        readText(appName, out, true)
+    }
+
+    private fun fileInit(fileName: String, isAppend: Boolean = false): FileWriter {
+        val storeBaseLocation = ApplicationProvider.getApplicationContext<Context>()
+            .getExternalFilesDir(null)?.absolutePath + "/"
+
+        Log.d(TAG, "运行输出基本存储路径 $storeBaseLocation")
+        return FileWriter(File(storeBaseLocation + fileName).apply {
+            if (!exists()) {
+                createNewFile()
+            }
+        }, isAppend)
     }
 
     private fun jumpToStartPage() {
@@ -307,7 +321,7 @@ class ExampleInstrumentedTest {
                     sb.append(subView.contentDescription).append('\n')
                 }
                 i++
-                Log.d(TAG, "readTextDeeply: ${subView.text} $i")
+//                Log.d(TAG, "readTextDeeply: ${subView.text} $i")
                 readTextDeeply(subView, sb)
                 looped = 0
             } else {
