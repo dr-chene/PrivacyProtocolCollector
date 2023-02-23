@@ -121,22 +121,19 @@ class ExampleInstrumentedTest {
      */
     @Test
     fun collectCurrentWindow() {
-
         device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         val out = fileInit("CurrentCollect.txt")
         Log.d(TAG, "收集当前页面开始")
         val webView = device.findObject(UiSelector().className(WebView::class.java).instance(1))
-        var isWeb = true
         val detailView = if (webView.exists()) {
             webView
         } else {
-            isWeb = false
             device.findObject(UiSelector().className(ScrollView::class.java))
         }
 
         if (detailView.exists()) {
             val sb = StringBuilder()
-            readTextDeeply(detailView, sb, isWeb)
+            readTextDeeply(detailView, sb)
             out.write(sb.toString())
         }
         out.flush()
@@ -316,17 +313,15 @@ class ExampleInstrumentedTest {
     private fun enterDetailWindow(privacyInfo: PrivacyInfo, index: Int) {
         Thread.sleep(3000)
         val webView = device.findObject(UiSelector().className(WebView::class.java).instance(1))
-        var isWeb = true
         val detailView = if (webView.exists()) {
             webView
         } else {
-            isWeb = false
             device.findObject(UiSelector().className(ScrollView::class.java))
         }
 
         if (detailView.exists()) {
             val sb = StringBuilder()
-            readTextDeeply(detailView, sb, isWeb)
+            readTextDeeply(detailView, sb)
 
             privacyInfo.put(index, sb.toString())
         } else {
@@ -338,7 +333,7 @@ class ExampleInstrumentedTest {
     /**
      * 递归读取详情页协议文本
      */
-    private fun readTextDeeply(view: UiObject, sb: StringBuilder, isWebView: Boolean = false) {
+    private fun readTextDeeply(view: UiObject, sb: StringBuilder) {
 //        Log.d(TAG, "当前 UiObject childCount = ${view.childCount}")
         if (view.className.contains("GridView")) {
             view.visibleBounds.let {
@@ -348,8 +343,7 @@ class ExampleInstrumentedTest {
         }
         var i = 0
         var looped = 0
-        val limit = if (isWebView) view.childCount - 1 else view.childCount
-        while (i < limit) {
+        while (i < view.childCount) {
             val subView = view.getChild(UiSelector().index(i))
             if (subView.exists()) {
                 if (!subView.text.isNullOrEmpty()) {
