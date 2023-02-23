@@ -5,14 +5,10 @@ import android.text.TextUtils
 import android.util.Log
 import android.webkit.WebView
 import android.widget.ScrollView
-import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.UiObject
-import androidx.test.uiautomator.UiSelector
-import androidx.test.uiautomator.Until
+import androidx.test.uiautomator.*
 import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -124,18 +120,19 @@ class ExampleInstrumentedTest {
         device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         val out = fileInit("CurrentCollect.txt")
         Log.d(TAG, "收集当前页面开始")
+        val sb = StringBuilder()
         val webView = device.findObject(UiSelector().className(WebView::class.java).instance(1))
-        val detailView = if (webView.exists()) {
-            webView
+        if (webView.exists()) {
+            readWebText(webView, sb)
         } else {
-            device.findObject(UiSelector().className(ScrollView::class.java))
+            val scrollView = device.findObject(UiSelector().className(ScrollView::class.java))
+            if (scrollView.exists()) {
+                readScrollText(UiScrollable(scrollView.selector), sb)
+            } else {
+                Log.e("runtime_error", "进入详情页后没有找到详情 view")
+            }
         }
-
-        if (detailView.exists()) {
-            val sb = StringBuilder()
-            readTextDeeply(detailView, sb)
-            out.write(sb.toString())
-        }
+        out.write(sb.toString())
         out.flush()
         out.close()
     }
@@ -256,16 +253,20 @@ class ExampleInstrumentedTest {
 //            rejectButton.click()
 //        }
         // 用户协议、隐私政策、青少年xxx
-        var textView = device.findObject(UiSelector().className(ScrollView::class.java))
-        if (!textView.exists()) {
-            textView =
-                device.findObject(UiSelector().textContains("《").className(TextView::class.java))
-        }
-        if (!textView.exists()) {
-            return false
-        }
         val simpleInfo = StringBuilder()
-        readTextDeeply(textView, simpleInfo)
+        val scrollView = device.findObject(UiSelector().className(ScrollView::class.java))
+
+        if (scrollView.exists()) {
+            readScrollText(UiScrollable(scrollView.selector), simpleInfo)
+        } else {
+            val textView = device.findObject(UiSelector().textContains("《"))
+            if (textView.exists()) {
+                readWebText(textView, simpleInfo)
+            } else {
+                Log.e("runtime_error", "未找到简易协议文本，返回")
+                return false
+            }
+        }
 
         val privacyInfo = PrivacyInfo(appName, simpleInfo.toString())
         if (isHalfAuto) {
@@ -312,21 +313,20 @@ class ExampleInstrumentedTest {
 
     private fun enterDetailWindow(privacyInfo: PrivacyInfo, index: Int) {
         Thread.sleep(3000)
+        val sb = StringBuilder()
         val webView = device.findObject(UiSelector().className(WebView::class.java).instance(1))
-        val detailView = if (webView.exists()) {
-            webView
+        if (webView.exists()) {
+            readWebText(webView, sb)
         } else {
-            device.findObject(UiSelector().className(ScrollView::class.java))
+            val scrollView = device.findObject(UiSelector().className(ScrollView::class.java))
+            if (scrollView.exists()) {
+                readScrollText(UiScrollable(scrollView.selector), sb)
+            } else {
+                Log.e("runtime_error", "进入详情页后没有找到详情 view")
+            }
         }
 
-        if (detailView.exists()) {
-            val sb = StringBuilder()
-            readTextDeeply(detailView, sb)
-
-            privacyInfo.put(index, sb.toString())
-        } else {
-            Log.e("runtime_error", "进入详情页后没有找到详情 view")
-        }
+        privacyInfo.put(index, sb.toString())
         device.pressBack()
     }
 
@@ -352,7 +352,7 @@ class ExampleInstrumentedTest {
                     sb.append(subView.contentDescription).append('\n')
                 }
                 i++
-//                Log.d(TAG, "readTextDeeply: ${subView.text} $i")
+                Log.d(TAG, "readTextDeeply: ${subView.text} $i")
                 readTextDeeply(subView, sb)
                 looped = 0
             } else {
@@ -377,6 +377,14 @@ class ExampleInstrumentedTest {
                 }
             }
         }
+    }
+
+    private fun readWebText(view: UiObject, sb: StringBuilder) {
+        readTextDeeply(view, sb)
+    }
+
+    private fun readScrollText(view: UiScrollable, sb: StringBuilder) {
+//        view.
     }
 
     companion object {
@@ -413,7 +421,10 @@ class ExampleInstrumentedTest {
         }
 
         fun isLegal(): Boolean {
-            return userAgreement.isNotEmpty() && privacyPolicy.isNotEmpty() && !TextUtils.equals(userAgreement, privacyPolicy)
+            return userAgreement.isNotEmpty() && privacyPolicy.isNotEmpty() && !TextUtils.equals(
+                userAgreement,
+                privacyPolicy
+            )
         }
     }
 }
