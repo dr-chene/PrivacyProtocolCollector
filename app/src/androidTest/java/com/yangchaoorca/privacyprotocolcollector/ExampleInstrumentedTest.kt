@@ -102,13 +102,15 @@ class ExampleInstrumentedTest {
     /**
      * 收集单独的 app 文件
      * 进入 app，手动点击弹出协议简介后点击运行
-     * 以 append 的方式存放于另以文件
+     * 以 append 的方式存放于另一文件
      */
     @Test
     fun collectOneApp() {
         val appName = ""
 
+        device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         val out = fileInit("SingleCollect.txt", true)
+        Log.d(TAG, "单独收集开始，请开始点击协议链接")
         readText(appName, out, true)
     }
 
