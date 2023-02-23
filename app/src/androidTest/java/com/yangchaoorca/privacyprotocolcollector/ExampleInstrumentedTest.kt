@@ -112,6 +112,36 @@ class ExampleInstrumentedTest {
         val out = fileInit("SingleCollect.txt", true)
         Log.d(TAG, "单独收集开始，请开始点击协议链接")
         readText(appName, out, true)
+        out.flush()
+        out.close()
+    }
+
+    /**
+     * 直接收集当前详情文本
+     */
+    @Test
+    fun collectCurrentWindow() {
+        val tag = ""
+
+        device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        val out = fileInit("CurrentCollect.txt", true)
+        Log.d(TAG, "收集当前页面开始")
+        val webView = device.findObject(UiSelector().className(WebView::class.java).instance(1))
+        var isWeb = true
+        val detailView = if (webView.exists()) {
+            webView
+        } else {
+            isWeb = false
+            device.findObject(UiSelector().className(ScrollView::class.java))
+        }
+
+        if (detailView.exists()) {
+            val sb = StringBuilder()
+            readTextDeeply(detailView, sb, isWeb)
+            out.appendLine("tag = $tag, result = $sb")
+        }
+        out.flush()
+        out.close()
     }
 
     private fun fileInit(fileName: String, isAppend: Boolean = false): FileWriter {
