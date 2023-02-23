@@ -121,10 +121,9 @@ class ExampleInstrumentedTest {
      */
     @Test
     fun collectCurrentWindow() {
-        val tag = ""
 
         device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-        val out = fileInit("CurrentCollect.txt", true)
+        val out = fileInit("CurrentCollect.txt")
         Log.d(TAG, "收集当前页面开始")
         val webView = device.findObject(UiSelector().className(WebView::class.java).instance(1))
         var isWeb = true
@@ -138,7 +137,7 @@ class ExampleInstrumentedTest {
         if (detailView.exists()) {
             val sb = StringBuilder()
             readTextDeeply(detailView, sb, isWeb)
-            out.appendLine("tag = $tag, result = $sb")
+            out.write(sb.toString())
         }
         out.flush()
         out.close()
@@ -341,6 +340,12 @@ class ExampleInstrumentedTest {
      */
     private fun readTextDeeply(view: UiObject, sb: StringBuilder, isWebView: Boolean = false) {
 //        Log.d(TAG, "当前 UiObject childCount = ${view.childCount}")
+        if (view.className.contains("GridView")) {
+            view.visibleBounds.let {
+                device.swipe(it.centerX(), it.bottom / 10 * 9, it.centerX(), it.top, 100)
+            }
+            return
+        }
         var i = 0
         var looped = 0
         val limit = if (isWebView) view.childCount - 1 else view.childCount
