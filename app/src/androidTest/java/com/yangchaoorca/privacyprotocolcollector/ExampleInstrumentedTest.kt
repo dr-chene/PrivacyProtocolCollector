@@ -9,9 +9,9 @@ import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.UiObject2
+import androidx.test.uiautomator.UiObject
+import androidx.test.uiautomator.UiSelector
 import androidx.test.uiautomator.Until
 import org.json.JSONObject
 import org.junit.Test
@@ -137,8 +137,8 @@ class ExampleInstrumentedTest {
         if (!TextUtils.isEmpty(appName)) {
             Log.d(TAG, "开始收集：appName = $appName")
             var isOpen = true
-            val icon = device.findObject(By.text(appName))
-            if (icon != null) {
+            val icon = device.findObject(UiSelector().text(appName))
+            if (icon.exists()) {
                 // 可能存在桌面图标点击不了的情况
                 device.performActionAndWait({
                     device.click(icon.visibleBounds.centerX(), icon.visibleBounds.centerY())
@@ -149,7 +149,10 @@ class ExampleInstrumentedTest {
                 // 因此启动应用后直接读取即可
                 if (!readText(appName, success, isHalfAuto)) {
                     Log.e(TAG, "协议文本收集失败，appName = $appName, index = $index")
-                    failed.appendLine("协议文本收集失败，appName = $appName, index = $index")
+                    if (isHalfAuto) {
+                        // 记录在半自动收集失败的 app
+                        failed.appendLine("协议文本收集失败，appName = $appName, index = $index")
+                    }
                     // 失败的原因多数是因为代码无法普遍适配开发者非常规的实现，将这些 app 收集用于后续半自动化收集
                     halfList?.add(index to appName)
                 }
@@ -178,20 +181,22 @@ class ExampleInstrumentedTest {
         // 假设单独存放的文本链接是以书名号包围的，否则归为非常规实现
 
         // text 实现
-        device.findObjects(By.textStartsWith("《")).forEachIndexed { index, uiObject2 ->
-            if (uiObject2 != null && uiObject2.isClickable) {
+        for (i in 0..1) {
+            val text = device.findObject(UiSelector().textStartsWith("《").instance(i))
+            if (text.exists() && text.exists()) {
                 clicked++
-                uiObject2.click()
-                enterDetailWindow(privacyInfo, index)
+                text.clickAndWaitForNewWindow()
+                enterDetailWindow(privacyInfo, i)
             }
         }
         if (clicked <= 0) {
             // desc 实现
-            device.findObjects(By.descStartsWith("《")).forEachIndexed { index, uiObject2 ->
-                if (uiObject2 != null && uiObject2.isClickable) {
+            for (i in 0..1) {
+                val desc = device.findObject(UiSelector().descriptionStartsWith("《").instance(i))
+                if (desc.exists() && desc.exists()) {
                     clicked++
-                    uiObject2.click()
-                    enterDetailWindow(privacyInfo, index)
+                    desc.clickAndWaitForNewWindow()
+                    enterDetailWindow(privacyInfo, i)
                 }
             }
         }
@@ -209,12 +214,12 @@ class ExampleInstrumentedTest {
 //            rejectButton.click()
 //        }
         // 用户协议、隐私政策、青少年xxx
-        var textView = device.findObject(By.clazz(ScrollView::class.java))
-        if (textView == null) {
+        var textView = device.findObject(UiSelector().className(ScrollView::class.java))
+        if (!textView.exists()) {
             textView =
-                device.findObject(By.textContains("《").clazz(TextView::class.java))
+                device.findObject(UiSelector().textContains("《").className(TextView::class.java))
         }
-        if (textView == null) {
+        if (!textView.exists()) {
             return false
         }
         val simpleInfo = StringBuilder()
@@ -227,7 +232,7 @@ class ExampleInstrumentedTest {
                 // 操作者手动点击文本链接转到 web 页面
                 device.waitForWindowUpdate(
                     device.currentPackageName,
-                    2 * WAIT_FOR_WINDOW_TIMEOUT
+                    WAIT_FOR_WINDOW_TIMEOUT
                 )
                 enterDetailWindow(privacyInfo, i)
             }
@@ -265,16 +270,18 @@ class ExampleInstrumentedTest {
 
     private fun enterDetailWindow(privacyInfo: PrivacyInfo, index: Int) {
         Thread.sleep(3000)
-        val webViews = device.findObjects(By.clazz(WebView::class.java))
-        val detailView = if (webViews.size > 1) {
-            webViews[1]
+        val webView = device.findObject(UiSelector().className(WebView::class.java).instance(1))
+        var isWeb = true
+        val detailView = if (webView.exists()) {
+            webView
         } else {
-            device.findObject(By.clazz(ScrollView::class.java))
+            isWeb = false
+            device.findObject(UiSelector().className(ScrollView::class.java))
         }
 
-        if (detailView != null) {
+        if (detailView.exists()) {
             val sb = StringBuilder()
-            readTextDeeply(detailView, sb)
+            readTextDeeply(detailView, sb, isWeb)
 
             privacyInfo.put(index, sb.toString())
         } else {
@@ -284,17 +291,46 @@ class ExampleInstrumentedTest {
     }
 
     /**
-     * 递归读取 WebView 协议文本
+     * 递归读取详情页协议文本
      */
-    private fun readTextDeeply(view: UiObject2, sb: StringBuilder) {
+    private fun readTextDeeply(view: UiObject, sb: StringBuilder, isWebView: Boolean = false) {
 //        Log.d(TAG, "当前 UiObject childCount = ${view.childCount}")
-        view.children.forEach {
-            if (!it.text.isNullOrEmpty()) {
-                sb.append(it.text).append('\n')
-            } else if (!it.contentDescription.isNullOrEmpty()) {
-                sb.append(it.contentDescription).append('\n')
+        var i = 0
+        var looped = 0
+        val limit = if (isWebView) view.childCount - 1 else view.childCount
+        while (i < limit) {
+            val subView = view.getChild(UiSelector().index(i))
+            if (subView.exists()) {
+                if (!subView.text.isNullOrEmpty()) {
+                    sb.append(subView.text).append('\n')
+                } else if (!subView.contentDescription.isNullOrEmpty()) {
+                    sb.append(subView.contentDescription).append('\n')
+                }
+                i++
+                Log.d(TAG, "readTextDeeply: ${subView.text} $i")
+                readTextDeeply(subView, sb)
+                looped = 0
+            } else {
+                // 子项未显示，向上滑动屏幕
+                Thread.sleep(1000)
+                if (view.exists()) {
+                    view.visibleBounds.let {
+                        device.swipe(it.centerX(), it.bottom / 10 * 9, it.centerX(), it.top, 100)
+                    }
+                }
+//                else {
+//                    // 不存在的情况回退尝试
+//                    // 一般不存在的情况是 webview 放置了 gridview 表格，将 dfs 转换成了 bfs
+//                    val x = device.displayWidth / 2
+//                    val y = device.displayHeight / 5
+//                    device.swipe(x, y, x, y * 4, 100)
+//                }
+
+                // 保险，防止意外情况导致的死循环
+                if (looped++ > 3) {
+                    break
+                }
             }
-            readTextDeeply(it, sb)
         }
     }
 
