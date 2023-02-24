@@ -347,9 +347,9 @@ class ExampleInstrumentedTest {
             val subView = view.getChild(UiSelector().index(i))
             if (subView.exists()) {
                 if (!subView.text.isNullOrEmpty()) {
-                    sb.append(subView.text).append('\n')
+                    sb.appendLine(subView.text)
                 } else if (!subView.contentDescription.isNullOrEmpty()) {
-                    sb.append(subView.contentDescription).append('\n')
+                    sb.appendLine(subView.contentDescription)
                 }
                 i++
                 Log.d(TAG, "readTextDeeply: ${subView.text} $i")
@@ -384,7 +384,35 @@ class ExampleInstrumentedTest {
     }
 
     private fun readScrollText(view: UiScrollable, sb: StringBuilder) {
-//        view.
+        val set = hashSetOf<String>()
+        // 可能存在 scrollview 超 31页的情况，这种时候就只能靠人为修正了
+        for (i in 0..view.maxSearchSwipes) {
+            if (readTextWithSet(view, sb, set) > 0) {
+                view.swipeUp(100)
+                Thread.sleep(1000)
+            } else {
+                // 无新增文本表示已经阅读完成了，提前结束循环
+                break
+            }
+        }
+    }
+
+    private fun readTextWithSet(view: UiObject, sb: StringBuilder, set: HashSet<String>): Int {
+        var res = 0
+        for (i in 0 until view.childCount) {
+            val subView = view.getChild(UiSelector().index(i))
+            if (subView.exists()) {
+                var text = subView.text
+                if (text.isNullOrEmpty()) {
+                    text = subView.contentDescription
+                }
+                if (!text.isNullOrEmpty() && set.add(text)) {
+                    sb.appendLine(text)
+                }
+                res += readTextWithSet(subView, sb, set) + 1
+            }
+        }
+        return res
     }
 
     companion object {
