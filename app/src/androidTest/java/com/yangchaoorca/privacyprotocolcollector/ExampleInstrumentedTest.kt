@@ -270,12 +270,12 @@ class ExampleInstrumentedTest {
 
         val privacyInfo = PrivacyInfo(appName, simpleInfo.toString())
         if (isHalfAuto) {
-            Log.d(TAG, "半自动化收集开始，appName = $appName")
+            Log.e(TAG, "半自动化收集开始，appName = $appName")
             for (i in 0..1) {
                 // 操作者手动点击文本链接转到 web 页面
                 device.waitForWindowUpdate(
                     device.currentPackageName,
-                    WAIT_FOR_WINDOW_TIMEOUT
+                    2 * WAIT_FOR_WINDOW_TIMEOUT
                 )
                 enterDetailWindow(privacyInfo, i)
             }
@@ -398,18 +398,21 @@ class ExampleInstrumentedTest {
     }
 
     private fun readTextWithSet(view: UiObject, sb: StringBuilder, set: HashSet<String>): Int {
-        var res = 0
+        // 本身是想用是否有读到新增来决定是否提前推出循环，但应该是多个子 view 直接占据了这个屏幕，导致上一层的 view 找不到，从而提前退出了循环
+        // 这里直接不提前退出循环了
+        val res = 1
         for (i in 0 until view.childCount) {
             val subView = view.getChild(UiSelector().index(i))
             if (subView.exists()) {
                 var text = subView.text
-                if (text.isNullOrEmpty()) {
+                if (text.isNullOrBlank()) {
                     text = subView.contentDescription
                 }
-                if (!text.isNullOrEmpty() && set.add(text)) {
+                if (!text.isNullOrBlank() && set.add(text)) {
                     sb.appendLine(text)
                 }
-                res += readTextWithSet(subView, sb, set) + 1
+//                Log.d(TAG, "readTextWithSet: $text")
+                readTextWithSet(subView, sb, set)
             }
         }
         return res
