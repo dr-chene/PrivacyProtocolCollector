@@ -389,7 +389,7 @@ class ExampleInstrumentedTest {
         for (i in 0..view.maxSearchSwipes) {
             if (readTextWithSet(view, sb, set) > 0) {
                 view.swipeUp(100)
-                Thread.sleep(1000)
+                Thread.sleep(1500)
             } else {
                 // 无新增文本表示已经阅读完成了，提前结束循环
                 break
@@ -398,9 +398,7 @@ class ExampleInstrumentedTest {
     }
 
     private fun readTextWithSet(view: UiObject, sb: StringBuilder, set: HashSet<String>): Int {
-        // 本身是想用是否有读到新增来决定是否提前推出循环，但应该是多个子 view 直接占据了这个屏幕，导致上一层的 view 找不到，从而提前退出了循环
-        // 这里直接不提前退出循环了
-        val res = 1
+        var res = 0
         for (i in 0 until view.childCount) {
             val subView = view.getChild(UiSelector().index(i))
             if (subView.exists()) {
@@ -410,9 +408,10 @@ class ExampleInstrumentedTest {
                 }
                 if (!text.isNullOrBlank() && set.add(text)) {
                     sb.appendLine(text)
+                    res++
                 }
-//                Log.d(TAG, "readTextWithSet: $text")
-                readTextWithSet(subView, sb, set)
+                Log.d(TAG, "readTextWithSet: $text")
+                res += readTextWithSet(subView, sb, set)
             }
         }
         return res
