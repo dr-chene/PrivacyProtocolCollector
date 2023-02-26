@@ -132,7 +132,9 @@ class ExampleInstrumentedTest {
                 Log.e("runtime_error", "进入详情页后没有找到详情 view")
             }
         }
-        out.write(sb.toString())
+        out.write(JSONObject().apply {
+            put("currentText", sb.toString())
+        }.toString())
         out.flush()
         out.close()
     }
