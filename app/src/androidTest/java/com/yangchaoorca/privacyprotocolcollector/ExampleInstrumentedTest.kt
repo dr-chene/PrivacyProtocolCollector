@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.*
 import org.json.JSONObject
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -20,10 +21,16 @@ import java.io.FileWriter
  *
  * See [testing documentation](http://d.android.com/tools/testing).
  */
+@Deprecated("请使用新的 test 代码")
 @RunWith(AndroidJUnit4::class)
 class ExampleInstrumentedTest {
 
     private lateinit var device: UiDevice
+
+    @Before
+    fun setUp() {
+        device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+    }
 
     /**
      * 测试真机是否卡顿
@@ -47,7 +54,6 @@ class ExampleInstrumentedTest {
      */
     @Test
     fun collectPrivacyProtocolText() {
-        device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
         jumpToStartPage()
 
@@ -101,12 +107,11 @@ class ExampleInstrumentedTest {
      * 以 append 的方式存放于另一文件
      */
     @Test
-    fun collectOneApp() {
-        val appName = ""
+    fun  collectOneApp() {
+        val appName = "人本位"
 
-        device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         val out = fileInit("SingleCollect.txt", true)
-        Log.d(TAG, "单独收集开始，请开始点击协议链接")
+        Log.d(TAG, "单独收集开始")
         readText(appName, out, true)
         out.flush()
         out.close()
@@ -117,7 +122,6 @@ class ExampleInstrumentedTest {
      */
     @Test
     fun collectCurrentWindow() {
-        device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         val out = fileInit("CurrentCollect.txt")
         Log.d(TAG, "收集当前页面开始")
         val sb = StringBuilder()
@@ -413,7 +417,7 @@ class ExampleInstrumentedTest {
                     res++
                 }
                 Log.d(TAG, "readTextWithSet: $text")
-                res += readTextWithSet(subView, sb, set)
+                res += readTextWithSet(subView, sb, set) + 1
             }
         }
         return res
