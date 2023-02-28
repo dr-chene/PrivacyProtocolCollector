@@ -50,7 +50,12 @@ class GetProtocol {
                 if (scrollView.exists()) {
                     readScrollView(UiScrollable(scrollView.selector), simpleInfo)
                 } else {
-                    val textView = device.findObject(UiSelector().textContains("《"))
+                    var textView = device.findObject(UiSelector().textContains("《"))
+                    if (textView.exists()) {
+                        simpleInfo.appendLine(textView.text)
+                    } else {
+                        textView = device.findObject(UiSelector().textContains("“"))
+                    }
                     if (textView.exists()) {
                         simpleInfo.appendLine(textView.text)
                     } else {
@@ -67,7 +72,7 @@ class GetProtocol {
                     Log.e(TAG, "半自动化收集开始，appName = $appName, name = ${if (i == 0) "用户协议" else "隐私政策"}")
                     device.waitForWindowUpdate(
                         device.currentPackageName,
-                        2 * WAIT_FOR_WINDOW_TIMEOUT
+                        WAIT_FOR_WINDOW_TIMEOUT
                     )
                     enterDetailWindow(privacyInfo, i)
                 }
@@ -75,6 +80,7 @@ class GetProtocol {
                     privacyInfo.toJson().let {
                         // 保存协议文本信息
                         autoCollectResult.appendLine(it)
+                        autoCollectResult.flush()
                     Log.d(TAG, "收集的协议信息：$it")
                     }
                 } else {
@@ -249,13 +255,17 @@ class GetProtocol {
     }
 
     companion object {
-        private const val COLLECT_APP_LIST = "衔目、艺播萝美育"
+        private const val COLLECT_APP_LIST = "美得理电鼓玩家、昆曲迷、音频编辑提取器、友乐谱、评剧迷、2496、轻松睡眠、云赏HIFI、音频剪辑lab"
         private const val TAG = "get_protocol"
         private const val WAIT_FOR_WINDOW_TIMEOUT = 5500L
 
         private const val LIST_SAVE = """
             百万麒麟、不为、集溜、泉眼、衔目、云赏文化、圆点5G、Uplay钢琴、自动巴巴、艺播萝美育
-            
+            新四平、指尖剪辑视频编辑、iBaby Care、诺云直播、鹊华视频、微视中国、微商视频水印、艺术融媒体、牛Biu段子
+            视频剪辑编辑、去水印王、高手、视界观、指尖录屏、闪视频
+            音妙剪辑、播鱼、捧音、VitOS Lite、元音符、音频剪辑乐软件、UMIDIGI、美梦睡眠
+            右转、Bayge、吴歌、友鼓助手、友鼓轻松学、音频剪辑神器、音频提取器编辑器、乐知海音乐
+            智能音频提取器、阿贝路音乐、美得理电鼓玩家、昆曲迷、音频编辑提取器、友乐谱、评剧迷、2496、轻松睡眠、云赏HIFI、音频剪辑lab
         """
     }
 
@@ -274,13 +284,13 @@ class GetProtocol {
             return JSONObject().apply {
                 put("appName", name)
                 put("info", text)
-                put("userAgreement", userAgreement)
+                put("userAgreement", if (privacyPolicy == userAgreement) "" else userAgreement)
                 put("privacyPolicy", privacyPolicy)
             }.toString()
         }
 
         fun isLegal(): Boolean {
-            return userAgreement.isNotEmpty() && privacyPolicy.isNotEmpty()
+            return privacyPolicy.isNotEmpty()
         }
     }
 }
