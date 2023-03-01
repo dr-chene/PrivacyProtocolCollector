@@ -107,7 +107,7 @@ class GetProtocol {
     }
 
     private fun enterDetailWindow(privacyInfo: PrivacyInfo, index: Int) {
-        Thread.sleep(2000)
+        Thread.sleep(WAIT_FOR_WEB_LOAD)
         val sb = StringBuilder()
         val webView = device.findObject(UiSelector().className(WebView::class.java).instance(1))
         if (webView.exists()) {
@@ -255,9 +255,10 @@ class GetProtocol {
     }
 
     companion object {
-        private const val COLLECT_APP_LIST = "美得理电鼓玩家、昆曲迷、音频编辑提取器、友乐谱、评剧迷、2496、轻松睡眠、云赏HIFI、音频剪辑lab"
+        private const val COLLECT_APP_LIST = ""
         private const val TAG = "get_protocol"
         private const val WAIT_FOR_WINDOW_TIMEOUT = 5500L
+        private const val WAIT_FOR_WEB_LOAD = 3000L
 
         private const val LIST_SAVE = """
             百万麒麟、不为、集溜、泉眼、衔目、云赏文化、圆点5G、Uplay钢琴、自动巴巴、艺播萝美育
@@ -266,6 +267,22 @@ class GetProtocol {
             音妙剪辑、播鱼、捧音、VitOS Lite、元音符、音频剪辑乐软件、UMIDIGI、美梦睡眠
             右转、Bayge、吴歌、友鼓助手、友鼓轻松学、音频剪辑神器、音频提取器编辑器、乐知海音乐
             智能音频提取器、阿贝路音乐、美得理电鼓玩家、昆曲迷、音频编辑提取器、友乐谱、评剧迷、2496、轻松睡眠、云赏HIFI、音频剪辑lab
+            掘金策、钱景私人理财、东航财富、金赢掌、智汇谷、福克斯基金、执行家、薛掌柜、紫金天风期货通
+            壹佰金、久阳润泉、贵文智投
+            智语良投、国信期货通、浦领基金、赢基金、WGM、华西股票开户、掌上云期
+            方正中期财讯通、恒泰期货开户长赢版、新华基金、淘好基金、广发期货开户投资软件、潜龙点金、乐选股、五矿证券掌上盈、湘财期权
+            建仓宝、股扒扒、DCE财讯通、光大期货财讯通、融合视讯、国盛研究、U财经、经选基金
+            淘牛邦、宝城期货开户交易、西南开户宝、上海证券股票开户、国联安基金、问路石、申万菱信基金、东吴开户、中原红
+            湘财证券股票开户、萝卜股票、意才基金、利得基金、三立博易大师、财华财经pro、天相财富
+            山羊拼团商家、之交商家版、我做东、会承网、i生态、点了码、重惠通、爱淘源、团咚咚、爱豆仓、票马网、吉吉拍
+            大大买钢、登瑞坊、趣比比、满聚优选、云拼购、枞川味道、瑶光生态、贝多享、山羊拼团、21GO、e团油、酒赞
+            寻根农业、久加久云商、趣拼吧、惠拼购、春辉包装、袋鼠拼客、易乎社区、柠条
+            爱多多商城、蚂蚁换呗、云待商城、箱易通、推客佣金联盟、农极客、阁物、夏邑同城、有趣
+            团购宝、爱茶网、物格买菜、叻叻猪、迅播、蜀信e惠生活商户、拿货、聚米团G、饷
+            火听调音器、铃声秀、泊声、草根音乐、迷糊音乐播放器、中国好声音、音乐提取助手、川剧迷、节拍器专家、调音器大师、八戒机器人、55Y音乐社区、我爱弹琴、钢琴巴士、iReal Pro
+            库客音乐、扬琴调音器、宝耳、ASMR、趣弹UP、中唱音乐、粤剧迷、节奏节拍器
+            闪光短视频、嗨曲刷刷、MANA、我是演员、微商视频制作、Z视频、Wiseed、三农头条、悦看、一键去水印下载、艾睿热成像、悦享、视听海南、央博、ELLEone、影音视频播放器、IPC360、无障碍影视
+            扬帆、趣刷刷、Ozbil、快点投屏、视频剪辑器、人民视频、福抖直播
         """
     }
 
